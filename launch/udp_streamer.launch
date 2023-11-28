@@ -1,0 +1,88 @@
+<?xml version="1.0"?>
+<launch>
+    <!-- ============================ SETTINGS ============================= -->
+
+    <!-- Node frequency: the frequency [Hz] which rate.sleep() function will
+    attempt to maintain in the main_loop. -->
+    <arg 
+    name="node_frequency" 
+    default="100"/>
+
+    <!-- Camera name: used as a namespace for the node. -->
+    <arg 
+    name="camera_name" 
+    default=""/>
+
+    <!-- Image topic: images from this topic [sensor_msgs/Image] will be send
+    over UDP. -->
+    <arg 
+    name="image_topic" 
+    default="/camera/color/image_raw"/>
+
+    <!-- UDP IP: IP address of the PC running Unity. -->
+    <arg 
+    name="udp_ip" 
+    default="192.168.0.100"/>
+
+    <!-- UPD port: -->
+    <arg 
+    name="udp_port" 
+    default="8080"/>
+
+    <!-- UDP chunk size: -->
+    <arg 
+    name="chunk_size" 
+    default="32000"/>
+
+    <!-- FPS: -->
+    <arg 
+    name="fps_rate" 
+    default="30"/>
+
+    <!-- JPG quality: reuqired for JPG encoding. -->
+    <arg 
+    name="jpg_quality" 
+    default="80"/>
+
+    <!-- Enable imshow: show the incoming image for debugging purposes. -->
+    <arg 
+    name="enable_imshow" 
+    default="false"/>
+
+    <!-- ======================== END OF SETTINGS ========================== -->
+
+
+    <!-- UPD streamer: -->
+    <group ns="/$(arg camera_name)">
+        <node 
+        pkg="udp_ros" 
+        type="udp_streamer.py" 
+        name="udp_streamer" 
+        output="screen">
+            <param 
+            name="node_frequency" 
+            value="$(arg node_frequency)"/>
+            <param 
+            name="image_topic" 
+            value="$(arg image_topic)"/>
+            <param 
+            name="udp_ip" 
+            value="$(arg udp_ip)"/>
+            <param 
+            name="udp_port" 
+            value="$(arg udp_port)"/>
+            <param 
+            name="chunk_size" 
+            value="$(arg chunk_size)"/>
+            <param 
+            name="fps_rate" 
+            value="$(arg fps_rate)"/>
+            <param 
+            name="jpg_quality" 
+            value="$(arg jpg_quality)"/>
+            <param 
+            name="enable_imshow" 
+            value="$(arg enable_imshow)"/>
+        </node>
+    </group>
+</launch>
