@@ -17,14 +17,7 @@ TODO:
 import rospy
 import numpy as np
 from math import (ceil)
-from cv2 import (
-    IMWRITE_JPEG_QUALITY,
-    imshow,
-    waitKey,
-    imencode,
-    # cvtColor,
-    # COLOR_BGR2RGB,
-)
+import cv2
 from cv_bridge import (
     CvBridge,
     CvBridgeError,
@@ -53,6 +46,7 @@ class UDPStreamer:
         self,
         node_name,
         image_topic,
+        image_rotation,
         udp_ip,
         udp_port,
         chunk_size,
@@ -65,7 +59,9 @@ class UDPStreamer:
         """
 
         # # Private constants:
+        self.__NODE_NAME = node_name
         self.__IMAGE_TOPIC = image_topic
+        self.__IMAGE_ROTATION = image_rotation
         self.__UDP_IP = udp_ip
         self.__UDP_PORT = udp_port
         self.__CHUNK_SIZE = chunk_size
@@ -73,7 +69,7 @@ class UDPStreamer:
         self.__ENABLE_IMSHOW = enable_imshow
 
         self.__JPG_ENCODE_PARAMETERS = [
-            int(IMWRITE_JPEG_QUALITY),
+            int(cv2.IMWRITE_JPEG_QUALITY),
             jpg_quality,
         ]
         self.__BRIDGE = CvBridge()
@@ -83,11 +79,15 @@ class UDPStreamer:
         )
 
         # # Public constants:
-        self.NODE_NAME = node_name
 
         # # Private variables:
         self.__cv_image = None
         self.__frame_number = 0
+        self.__enable_imshow = self.__ENABLE_IMSHOW
+
+        self.__rotation_matrix = None
+        self.__rotated_width = None
+        self.__rotated_height = None
 
         # # Public variables:
 
@@ -96,7 +96,7 @@ class UDPStreamer:
         self.__dependency_initialized = False
 
         self.__node_is_initialized = rospy.Publisher(
-            f'{self.NODE_NAME}/is_initialized',
+            f'{self.__NODE_NAME}/is_initialized',
             Bool,
             queue_size=1,
         )
@@ -114,7 +114,7 @@ class UDPStreamer:
             rospy.Subscriber(
                 f'{self.__IMAGE_TOPIC}',
                 Image,
-                self.__camera_callback,
+                self.__image_topic_callback,
             )
         )
 
@@ -128,7 +128,7 @@ class UDPStreamer:
         rospy.Subscriber(
             f'{self.__IMAGE_TOPIC}',
             Image,
-            self.__camera_callback,
+            self.__image_topic_callback,
         )
 
         # # Timers:
@@ -139,9 +139,10 @@ class UDPStreamer:
 
         # # Node parameters:
         rospy.loginfo(
-            f'{self.NODE_NAME}:'
+            f'{self.__NODE_NAME}:'
             '\nNode parameters:'
             f'\n- image_topic: {self.__IMAGE_TOPIC}'
+            f'\n- image_rotation: {self.__IMAGE_ROTATION}'
             f'\n- udp_ip: {self.__UDP_IP}'
             f'\n- udp_port: {self.__UDP_PORT}'
             f'\n- chunk_size: {self.__CHUNK_SIZE}'
@@ -157,27 +158,77 @@ class UDPStreamer:
     # # Service handlers:
 
     # # Topic callbacks:
-    def __camera_callback(self, message):
+
+    def __image_topic_callback(self, message):
         """
         
         """
 
+        cv_image = None
+
         try:
-            self.__cv_image = self.__BRIDGE.imgmsg_to_cv2(
+            cv_image = self.__BRIDGE.imgmsg_to_cv2(
                 message,
                 'bgr8',
             )
-            # # TODO: Uncomment if the image appears bluish:
-            # self.__cv_image = cvtColor(
-            #     self.__cv_image,
-            #     COLOR_BGR2RGB,
-            # )
-
-            if not self.__is_initialized:
-                self.__dependency_status['image_topic'] = True
 
         except CvBridgeError as e:
-            print(e)
+            rospy.logerr(
+                (
+                    f'{self.__NODE_NAME}:'
+                    f' an error occured while converting from Image message to cv2. \n'
+                    f'{e} \n'
+                ),
+            )
+            return
+
+        if self.__IMAGE_ROTATION != 0:
+            # Calculate rotation matrix and new width and height to avoid image
+            # shrinking and distortion.
+            if not self.__dependency_status['image_topic']:
+                original_height, original_width = cv_image.shape[:2]
+
+                # getRotationMatrix2D needs coordinates in reverse order (width,
+                # height) compared to shape.
+                image_center = (original_width // 2, original_height // 2)
+
+                self.__rotation_matrix = cv2.getRotationMatrix2D(
+                    image_center,
+                    self.__IMAGE_ROTATION,
+                    1.0,
+                )
+
+                # Rotation calculates the cos and sin, taking absolutes of
+                # those.
+                abs_cos = abs(self.__rotation_matrix[0, 0])
+                abs_sin = abs(self.__rotation_matrix[0, 1])
+
+                # Find the new width and height bounds.
+                self.__rotated_width = int(
+                    original_height * abs_sin + original_width * abs_cos
+                )
+                self.__rotated_height = int(
+                    original_height * abs_cos + original_width * abs_sin
+                )
+
+                # Subtract old image center (bringing image back to origo) and
+                # adding the new image center coordinates.
+                (self.__rotation_matrix[0, 2]
+                ) += (self.__rotated_width / 2 - image_center[0])
+                (self.__rotation_matrix[1, 2]
+                ) += (self.__rotated_height / 2 - image_center[1])
+
+            # Rotate the image.
+            cv_image = cv2.warpAffine(
+                cv_image,
+                self.__rotation_matrix,
+                (self.__rotated_width, self.__rotated_height),
+            )
+
+        self.__cv_image = cv_image
+
+        if not self.__is_initialized:
+            self.__dependency_status['image_topic'] = True
 
     # Timer callbacks:
     def __udp_stream_timer(self, event):
@@ -210,7 +261,7 @@ class UDPStreamer:
             if self.__dependency_status_topics[key].get_num_connections() != 1:
                 if self.__dependency_status[key]:
                     rospy.logerr(
-                        (f'{self.NODE_NAME}: '
+                        (f'{self.__NODE_NAME}: '
                          f'lost connection to {key}!')
                     )
 
@@ -232,7 +283,7 @@ class UDPStreamer:
             rospy.logwarn_throttle(
                 15,
                 (
-                    f'{self.NODE_NAME}:'
+                    f'{self.__NODE_NAME}:'
                     f'{waiting_for}'
                     # f'\nMake sure those dependencies are running properly!'
                 ),
@@ -241,7 +292,7 @@ class UDPStreamer:
         # NOTE (optionally): Add more initialization criterea if needed.
         if (self.__dependency_initialized):
             if not self.__is_initialized:
-                rospy.loginfo(f'\033[92m{self.NODE_NAME}: ready.\033[0m',)
+                rospy.loginfo(f'\033[92m{self.__NODE_NAME}: ready.\033[0m',)
 
                 self.__is_initialized = True
 
@@ -255,6 +306,26 @@ class UDPStreamer:
 
         self.__node_is_initialized.publish(self.__is_initialized)
 
+    def __imshow(self):
+        """
+        
+        """
+
+        # Optionally show the frame.
+        if self.__enable_imshow:
+            cv2.imshow(
+                'self.__cv_image',
+                self.__cv_image,
+            )
+
+            if (
+                cv2.waitKey(1) & 0xFF == ord('q') or
+                cv2.getWindowProperty('self.__cv_image',
+                                      cv2.WND_PROP_VISIBLE) < 1
+            ):
+                cv2.destroyAllWindows()
+                self.__enable_imshow = False
+
     def __udp_stream(self):
         """
         
@@ -263,20 +334,10 @@ class UDPStreamer:
         if self.__cv_image is None:
             return
 
-        # Optionally show the frame.
-        if self.__ENABLE_IMSHOW:
-            imshow(
-                'self.__cv_image',
-                self.__cv_image,
-            )
-
-            if waitKey(1) & 0xFF == ord('q'):
-                pass
-
         # Encode image as jpg and calculate chunks.
         data_string = (
             np.array(
-                imencode(
+                cv2.imencode(
                     '.jpg',
                     self.__cv_image,
                     self.__JPG_ENCODE_PARAMETERS,
@@ -325,6 +386,8 @@ class UDPStreamer:
 
         self.__frame_number = self.__frame_number + 1
 
+        self.__imshow()
+
     # # Public methods:
     def main_loop(self):
         """
@@ -344,13 +407,13 @@ class UDPStreamer:
         
         """
 
-        rospy.loginfo_once(f'{self.NODE_NAME}: node is shutting down...',)
+        rospy.loginfo_once(f'{self.__NODE_NAME}: node is shutting down...',)
 
         # NOTE: Add code, which needs to be executed on nodes' shutdown here.
         # Publishing to topics is not guaranteed, use service calls or
         # set parameters instead.
 
-        rospy.loginfo_once(f'{self.NODE_NAME}: node has shut down.',)
+        rospy.loginfo_once(f'{self.__NODE_NAME}: node has shut down.',)
 
 
 def main():
@@ -378,6 +441,10 @@ def main():
         param_name=f'{rospy.get_name()}/image_topic',
         default='/camera/color/image_raw',
     )
+    image_rotation = rospy.get_param(
+        param_name=f'{rospy.get_name()}/image_rotation',
+        default=0,
+    )
     udp_ip = rospy.get_param(
         param_name=f'{rospy.get_name()}/udp_ip',
         default='192.168.0.100',
@@ -388,7 +455,7 @@ def main():
     )
     chunk_size = rospy.get_param(
         param_name=f'{node_name}/chunk_size',
-        default=32000,
+        default=4000,
     )
     fps_rate = rospy.get_param(
         param_name=f'{node_name}/fps_rate',
@@ -396,7 +463,7 @@ def main():
     )
     jpg_quality = rospy.get_param(
         param_name=f'{node_name}/jpg_quality',
-        default=80,
+        default=40,
     )
     enable_imshow = rospy.get_param(
         param_name=f'{node_name}/enable_imshow',
@@ -406,6 +473,7 @@ def main():
     class_instance = UDPStreamer(
         node_name=node_name,
         image_topic=image_topic,
+        image_rotation=image_rotation,
         udp_ip=udp_ip,
         udp_port=udp_port,
         chunk_size=chunk_size,

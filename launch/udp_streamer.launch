@@ -11,13 +11,18 @@
     <!-- Camera name: used as a namespace for the node. -->
     <arg 
     name="camera_name" 
-    default=""/>
+    default="camera"/>
 
     <!-- Image topic: images from this topic [sensor_msgs/Image] will be send
     over UDP. -->
     <arg 
     name="image_topic" 
     default="/camera/color/image_raw"/>
+
+    <!-- Image rotation: how to rotate the input image [degrees]. -->
+    <arg 
+    name="image_rotation" 
+    default="0"/>
 
     <!-- UDP IP: IP address of the PC running Unity. -->
     <arg 
@@ -29,20 +34,22 @@
     name="udp_port" 
     default="8080"/>
 
-    <!-- UDP chunk size: -->
+    <!-- UDP chunk size: the higher the JPG quality, the higher the chunk size,
+    approximately 1:100 ratio (e.g. jpg_quality=60, chunk_size=6000). -->
     <arg 
     name="chunk_size" 
-    default="32000"/>
+    default="4000"/>
 
-    <!-- FPS: -->
+    <!-- FPS: frames per second. -->
     <arg 
     name="fps_rate" 
     default="30"/>
 
-    <!-- JPG quality: reuqired for JPG encoding. -->
+    <!-- JPG quality: required for JPG encoding, the higher the JPG quality, the
+    higher the chunk size. -->
     <arg 
     name="jpg_quality" 
-    default="80"/>
+    default="40"/>
 
     <!-- Enable imshow: show the incoming image for debugging purposes. -->
     <arg 
@@ -65,6 +72,9 @@
             <param 
             name="image_topic" 
             value="$(arg image_topic)"/>
+            <param 
+            name="image_rotation" 
+            value="$(arg image_rotation)"/>
             <param 
             name="udp_ip" 
             value="$(arg udp_ip)"/>
