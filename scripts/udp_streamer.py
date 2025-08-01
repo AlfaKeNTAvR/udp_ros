@@ -308,20 +308,25 @@ class UDPStreamer:
 
     def __imshow(self):
         """
-        
+        Display the image with OpenCV and resize the window.
         """
 
         # Optionally show the frame.
         if self.__enable_imshow:
-            cv2.imshow(
-                'self.__cv_image',
-                self.__cv_image,
-            )
+            # Create a named window to allow resizing
+            window_name = 'Image Display'
+            cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 
+            # Resize the window to 1920x1080
+            cv2.resizeWindow(window_name, 1280, 720)
+
+            # Display the image
+            cv2.imshow(window_name, self.__cv_image)
+
+            # Handle window close and keyboard interrupt
             if (
-                cv2.waitKey(1) & 0xFF == ord('q') or
-                cv2.getWindowProperty('self.__cv_image',
-                                      cv2.WND_PROP_VISIBLE) < 1
+                cv2.waitKey(1) & 0xFF == ord('q')
+                or cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1
             ):
                 cv2.destroyAllWindows()
                 self.__enable_imshow = False
