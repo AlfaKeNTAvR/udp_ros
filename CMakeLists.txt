@@ -4,12 +4,19 @@ project(udp_ros)
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
 
+set(OpenCV_DIR /usr/lib/x86_64-linux-gnu/cmake/opencv4)
+
+
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   rospy
+  cv_bridge
+  sensor_msgs
+  image_transport
+  OpenCV
 )
 
 ## System dependencies are found with CMake's conventions
@@ -117,6 +124,7 @@ catkin_package(
 include_directories(
 # include
   ${catkin_INCLUDE_DIRS}
+  ${OpenCV_INCLUDE_DIRS}
 )
 
 ## Declare a C++ library
@@ -203,3 +211,7 @@ include_directories(
 
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
+
+add_executable(camera_streamer_node scripts/camera_streamer_node.cpp)
+target_link_libraries(camera_streamer_node ${catkin_LIBRARIES} ${OpenCV_LIBS} ${Boost_LIBRARIES})
+add_dependencies(camera_streamer_node ${catkin_EXPORTED_TARGETS})
