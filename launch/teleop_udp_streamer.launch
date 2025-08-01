@@ -1,0 +1,48 @@
+<?xml version="1.0"?>
+<launch>
+    <!-- ============================ SETTINGS ============================= -->
+
+    <!-- Node frequency: the frequency [Hz] which rate.sleep() function will
+    attempt to maintain in the main_loop. -->
+    <arg 
+    name="node_frequency" 
+    default="100"/>
+
+    <!-- Topic name: messages from this topic [std_msgs/String] will be send over UDP. -->
+    <arg 
+    name="teleop_phase_topic" 
+    default="/teleop_phase_topic"/>
+
+    <!-- UDP IP: IP address of the PC running Unity. -->
+    <arg 
+    name="udp_ip" 
+    default="192.168.0.103"/>
+
+    <!-- UPD port: -->
+    <arg 
+    name="udp_port" 
+    default="8083"/>
+
+    <!-- ======================== END OF SETTINGS ========================== -->
+
+
+    <!-- UPD Teleop Streamer Node: -->
+	<node 
+	pkg="udp_ros" 
+	type="teleop_phase_udp_streamer.py" 
+	name="udp_teleop_streamer" 
+	output="screen">
+	    <param 
+	    name="node_frequency" 
+	    value="$(arg node_frequency)"/>
+	    <param 
+	    name="teleop_phase_topic" 
+	    value="$(arg teleop_phase_topic)"/>
+	    <param 
+	    name="udp_ip" 
+	    value="$(arg udp_ip)"/>
+	    <param 
+	    name="udp_port" 
+	    value="$(arg udp_port)"/>
+	</node>
+</launch>
